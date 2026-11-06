@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Goat - Con Dê Siêu Năng Lượng</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            background: #0f172a;
+        }
+        .font-game {
+            font-family: 'Fredoka One', cursive;
+        }
+        /* Custom UI overlays */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Touch Zone Divider for 2-Player mode on Mobile */
+        .touch-zone-hint {
+            pointer-events: none;
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 11px;
+            font-weight: 800;
+            opacity: 0.5;
+            z-index: 10;
+        }
+        /* Pulse & Glow animations */
+        @keyframes superGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(234, 179, 8, 0.9)); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 30px rgba(250, 204, 21, 1)); transform: scale(1.05); }
+        }
+        .super-active {
+            animation: superGlow 1s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-0 m-0 overflow-hidden bg-slate-950 text-white">
+
+    <!-- Game Container -->
+    <div class="relative w-full h-screen max-w-md md:max-h-[844px] md:h-[90vh] md:rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-800 flex flex-col justify-between">
+        
+        <!-- Canvas for Game Render -->
+        <canvas id="gameCanvas" class="absolute inset-0 w-full h-full z-0 cursor-pointer"></canvas>
+
+        <!-- HUD Layer (Supports 1P & 2P) -->
+        <div id="hudLayer" class="relative z-10 p-3 flex flex-col items-center pointer-events-none hidden w-full">
+            <div id="hudContainer" class="flex justify-between items-center w-full max-w-xs gap-2">
+                <!-- P1 HUD -->
+                <div id="p1Hud" class="flex-1 bg-slate-900/80 p-2 rounded-xl border border-slate-700/80 backdrop-blur flex flex-col items-center">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-white border border-slate-900 inline-block"></span> P1 (Dê Trắng)
+                    </span>
+                    <span id="scoreTextP1" class="text-2xl font-game text-yellow-400">0</span>
+                    <div id="skillContainerP1" class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-1 border border-slate-700">
+                        <div id="skillBarP1" class="bg-amber-400 h-full rounded-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- P2 HUD (Visible in 2P mode) -->
+                <div id="p2Hud" class="flex-1 bg-slate-900/80 p-2 rounded-xl border border-amber-500/40 backdrop-blur flex flex-col items-center">
+                    <span class="text-[10px] uppercase font-bold text-amber-400 flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> P2 (Dê Vàng)
+                    </span>
+                    <span id="scoreTextP2" class="text-2xl font-game text-amber-400">0</span>
+                    <div id="skillContainerP2" class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-1 border border-slate-700">
+                        <div id="skillBarP2" class="bg-amber-500 h-full rounded-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Touch Hint for Mobile 2P -->
+            <div id="touchControlsHint" class="touch-zone-hint text-slate-300">
+                <span>👈 P1 TAP TRÁI (SPACE)</span>
+                <span>👉 P2 TAP PHẢI (MŨI TÊN ▲)</span>
+            </div>
+        </div>
+
+        <!-- MENU OVERLAY -->
+        <div id="menuOverlay" class="absolute inset-0 z-20 flex flex-col items-center justify-between p-6 bg-slate-950/80 backdrop-blur-md">
+            <div class="mt-8 text-center">
+                <div class="inline-block p-4 rounded-3xl bg-slate-900/80 border-2 border-amber-500/30 shadow-xl mb-3">
+                    <span class="text-5xl">🐐🐐</span>
+                </div>
+                <h1 class="text-4xl md:text-5xl font-game text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-500 tracking-wider drop-shadow">
+                    FLAPPY GOAT
+                </h1>
+                <p class="text-slate-300 text-xs mt-2 max-w-xs">Chọn chế độ và so tài điều khiển chú Dê cùng bạn bè!</p>
+            </div>
+
+            <!-- Game Mode Buttons -->
+            <div class="w-full max-w-xs space-y-3 mb-6">
+                <button id="btnPlay1P" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-game text-xl shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition transform flex items-center justify-center gap-2">
+                    🎮 1 NGƯỜI CHƠI
+                </button>
+                <button id="btnPlay2P" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 font-game text-xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition transform flex items-center justify-center gap-2">
+                    👥 2 NGƯỜI CHƠI (VS)
+                </button>
+                <button id="btnExit" class="w-full py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 font-bold text-base border border-slate-700 hover:text-white transition transform active:scale-95">
+                    🚪 THOÁT
+                </button>
+            </div>
+
+            <!-- Controls instruction -->
+            <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl text-slate-400 text-xs text-center w-full max-w-xs">
+                <div class="font-bold text-amber-400 mb-1">🎮 ĐIỀU KHIỂN:</div>
+                <div><b>P1 (Dê Trắng):</b> Phím Space / Tap bên Trái</div>
+                <div><b>P2 (Dê Vàng):</b> Phím Mũi Tên ▲ / Tap bên Phải</div>
+            </div>
+        </div>
+
+        <!-- GAME OVER OVERLAY -->
+        <div id="gameOverOverlay" class="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md hidden">
+            <div class="glass-panel w-full max-w-xs p-6 rounded-3xl text-center shadow-2xl border-2 border-red-500/30">
+                <div class="text-4xl mb-1">👑</div>
+                <h2 id="winnerTitle" class="text-2xl font-game text-amber-400 tracking-wider mb-3">GAME OVER</h2>
+                
+                <div id="scoresDisplay" class="bg-slate-900/90 rounded-2xl p-4 my-3 border border-slate-800 space-y-2">
+                    <!-- Dynamic Scores populate via JS -->
+                </div>
+
+                <div class="space-y-3 mt-5">
+                    <button id="btnRestart" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-400 text-slate-950 font-game text-xl shadow-lg shadow-green-500/30 hover:scale-105 active:scale-95 transition transform">
+                        🔄 CHƠI LẠI
+                    </button>
+                    <button id="btnMenu" class="w-full py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-md border border-slate-700 transition">
+                        🏠 VỀ MENU
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXIT CONFIRM MODAL -->
+        <div id="exitModal" class="absolute inset-0 z-30 flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-lg hidden">
+            <div class="glass-panel p-6 rounded-3xl text-center max-w-xs w-full">
+                <h3 class="text-2xl font-game text-white mb-2">Thoát Game?</h3>
+                <p class="text-slate-400 text-sm mb-6">Bạn có chắc chắn muốn rời khỏi trò chơi?</p>
+                <div class="flex gap-3">
+                    <button id="btnCancelExit" class="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm border border-slate-700">Hủy</button>
+                    <button id="btnConfirmExit" class="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm shadow-lg shadow-red-600/30">Thoát</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Main Game Script Logic -->
+    <script>
+        // Web Audio Synthesizer
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playJump() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(350, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(650, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+            playScore() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playPowerUp() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            }
+            playHit() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+        }
+
+        const soundFX = new SoundFX();
+
+        // Canvas Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI References
+        const menuOverlay = document.getElementById('menuOverlay');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const exitModal = document.getElementById('exitModal');
+        const hudLayer = document.getElementById('hudLayer');
+        const p2Hud = document.getElementById('p2Hud');
+        const touchControlsHint = document.getElementById('touchControlsHint');
+        const scoreTextP1 = document.getElementById('scoreTextP1');
+        const scoreTextP2 = document.getElementById('scoreTextP2');
+        const skillBarP1 = document.getElementById('skillBarP1');
+        const skillBarP2 = document.getElementById('skillBarP2');
+        const winnerTitle = document.getElementById('winnerTitle');
+        const scoresDisplay = document.getElementById('scoresDisplay');
+
+        // Game State Variables
+        let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+        let gameMode = '1P';    // '1P' or '2P'
+        let frameCount = 0;
+        let highScore1P = localStorage.getItem('flappy_goat_highscore') || 0;
+        const REQ_PIPES_FOR_SUPER = 15;
+        const GHOST_DURATION = 360; // 6 seconds
+
+        // Screen Dimensions
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Goat Factory / Class Concept
+        function createGoat(xOffset, colorTheme) {
+            return {
+                x: xOffset,
+                y: 250,
+                width: 44,
+                height: 38,
+                velocity: 0,
+                gravity: 0.38,
+                jumpStrength: -7.2,
+                rotation: 0,
+                alive: true,
+                score: 0,
+                ghostMode: false,
+                ghostTimer: 0,
+                colorTheme: colorTheme, // { body: '#ffffff', horn: '#0f172a' } or golden
+                reset: function(startY) {
+                    this.y = startY;
+                    this.velocity = 0;
+                    this.rotation = 0;
+                    this.alive = true;
+                    this.score = 0;
+                    this.ghostMode = false;
+                    this.ghostTimer = 0;
+                },
+                flap: function() {
+                    if (!this.alive) return;
+                    this.velocity = this.jumpStrength;
+                    soundFX.playJump();
+                },
+                update: function() {
+                    if (!this.alive) return;
+                    
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+                    
+                    this.rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 6, this.velocity * 0.07));
+
+                    // Ghost timer countdown
+                    if (this.ghostMode) {
+                        this.ghostTimer--;
+                        if (this.ghostTimer <= 0) {
+                            this.ghostMode = false;
+                        }
+                    }
+
+                    // Floor collision
+                    if (this.y + this.height / 2 >= canvas.height - 40) {
+                        this.y = canvas.height - 40 - this.height / 2;
+                        if (!this.ghostMode) this.die();
+                    }
+                    // Ceiling constraint
+                    if (this.y - this.height / 2 <= 0) {
+                        this.y = this.height / 2;
+                        this.velocity = 0;
+                    }
+                },
+                die: function() {
+                    if (this.alive) {
+                        this.alive = false;
+                        soundFX.playHit();
+                    }
+                },
+                draw: function() {
+                    if (!this.alive) return;
+
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.rotation);
+
+                    if (this.ghostMode) {
+                        ctx.save();
+                        ctx.shadowColor = '#f59e0b';
+                        ctx.shadowBlur = 20;
+                        ctx.globalAlpha = 0.75 + Math.sin(frameCount * 0.2) * 0.25;
+                    }
+
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.fillStyle = this.colorTheme.body;
+
+                    // 1. Body
+                    ctx.beginPath();
+                    ctx.ellipse(-4, 4, 18, 12, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 2. Legs
+                    ctx.beginPath();
+                    ctx.moveTo(6, 12); ctx.lineTo(8, 22);
+                    ctx.moveTo(-12, 12); ctx.lineTo(-14, 22);
+                    ctx.stroke();
+
+                    // 3. Tail
+                    ctx.beginPath();
+                    ctx.moveTo(-20, 0);
+                    ctx.quadraticCurveTo(-26, -6, -22, -12);
+                    ctx.quadraticCurveTo(-18, -6, -18, 0);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 4. Head & Neck
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(16, -14);
+                    ctx.ellipse(20, -18, 10, 7, -Math.PI / 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 5. Beard
+                    ctx.beginPath();
+                    ctx.moveTo(18, -12);
+                    ctx.lineTo(15, -4);
+                    ctx.lineTo(22, -10);
+                    ctx.fillStyle = this.colorTheme.beard || '#ffffff';
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 6. Snout & Eye
+                    ctx.beginPath();
+                    ctx.arc(27, -17, 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.arc(20, -20, 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fill();
+
+                    // 7. Ears
+                    ctx.beginPath();
+                    ctx.ellipse(12, -22, 5, 2.5, -Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fillStyle = this.colorTheme.body;
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 8. Horns
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(17, -24);
+                    ctx.quadraticCurveTo(10, -38, 2, -34);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(15, -27); ctx.lineTo(12, -28);
+                    ctx.moveTo(12, -31); ctx.lineTo(9, -32);
+                    ctx.stroke();
+
+                    if (this.ghostMode) {
+                        ctx.restore();
+                        if (frameCount % 4 === 0) {
+                            ctx.fillStyle = '#fbbf24';
+                            ctx.fillRect(-25 + Math.random() * 50, -25 + Math.random() * 50, 4, 4);
+                        }
+                    }
+
+                    ctx.restore();
+                }
+            };
+        }
+
+        // Initialize Goats
+        // Player 1: Classic White Goat
+        const player1 = createGoat(70, { body: '#ffffff', beard: '#ffffff' });
+        // Player 2: Golden/Amber Goat
+        const player2 = createGoat(110, { body: '#f59e0b', beard: '#fbbf24' });
+
+        // Pipe Obstacles Manager
+        const pipes = {
+            list: [],
+            width: 58,
+            gap: 145,
+            speed: 2.3,
+            spawnTimer: 0,
+            reset: function() {
+                this.list = [];
+                this.spawnTimer = 0;
+            },
+            spawn: function() {
+                const minHeight = 60;
+                const maxHeight = canvas.height - 180 - this.gap;
+                const topHeight = minHeight + Math.random() * (maxHeight - minHeight);
+                this.list.push({
+                    x: canvas.width,
+                    top: topHeight,
+                    bottom: canvas.height - topHeight - this.gap - 40,
+                    passedP1: false,
+                    passedP2: false
+                });
+            },
+            update: function() {
+                this.spawnTimer++;
+                if (this.spawnTimer > 110) {
+                    this.spawn();
+                    this.spawnTimer = 0;
+                }
+
+                for (let i = this.list.length - 1; i >= 0; i--) {
+                    let p = this.list[i];
+                    p.x -= this.speed;
+
+                    // Check Score for P1
+                    if (player1.alive && !p.passedP1 && p.x + this.width < player1.x) {
+                        p.passedP1 = true;
+                        player1.score++;
+                        scoreTextP1.innerText = player1.score;
+                        soundFX.playScore();
+                        checkSkillTrigger(player1);
+                    }
+
+                    // Check Score for P2
+                    if (gameMode === '2P' && player2.alive && !p.passedP2 && p.x + this.width < player2.x) {
+                        p.passedP2 = true;
+                        player2.score++;
+                        scoreTextP2.innerText = player2.score;
+                        soundFX.playScore();
+                        checkSkillTrigger(player2);
+                    }
+
+                    // Collision Checks
+                    if (player1.alive && !player1.ghostMode && checkCollision(player1, p)) {
+                        player1.die();
+                    }
+                    if (gameMode === '2P' && player2.alive && !player2.ghostMode && checkCollision(player2, p)) {
+                        player2.die();
+                    }
+
+                    // Remove off-screen pipes
+                    if (p.x + this.width < -20) {
+                        this.list.splice(i, 1);
+                    }
+                }
+
+                // Check Game Over Condition
+                if (gameMode === '1P' && !player1.alive) {
+                    triggerGameOver();
+                } else if (gameMode === '2P' && !player1.alive && !player2.alive) {
+                    triggerGameOver();
+                }
+            },
+            draw: function() {
+                const anyGhost = player1.ghostMode || (gameMode === '2P' && player2.ghostMode);
+                
+                this.list.forEach(p => {
+                    const pipeGradient = ctx.createLinearGradient(p.x, 0, p.x + this.width, 0);
+                    if (anyGhost) {
+                        pipeGradient.addColorStop(0, '#38bdf8');
+                        pipeGradient.addColorStop(0.5, '#7dd3fc');
+                        pipeGradient.addColorStop(1, '#0284c7');
+                    } else {
+                        pipeGradient.addColorStop(0, '#15803d');
+                        pipeGradient.addColorStop(0.5, '#4ade80');
+                        pipeGradient.addColorStop(1, '#166534');
+                    }
+
+                    ctx.fillStyle = pipeGradient;
+                    ctx.strokeStyle = '#052e16';
+                    ctx.lineWidth = 2;
+
+                    // Top Pipe
+                    ctx.fillRect(p.x, 0, this.width, p.top);
+                    ctx.strokeRect(p.x, 0, this.width, p.top);
+                    ctx.fillRect(p.x - 4, p.top - 20, this.width + 8, 20);
+                    ctx.strokeRect(p.x - 4, p.top - 20, this.width + 8, 20);
+
+                    // Bottom Pipe
+                    const bottomY = canvas.height - p.bottom - 40;
+                    ctx.fillRect(p.x, bottomY, this.width, p.bottom);
+                    ctx.strokeRect(p.x, bottomY, this.width, p.bottom);
+                    ctx.fillRect(p.x - 4, bottomY, this.width + 8, 20);
+                    ctx.strokeRect(p.x - 4, bottomY, this.width + 8, 20);
+                });
+            }
+        };
+
+        // Skill Trigger Logic
+        function checkSkillTrigger(goatObj) {
+            if (goatObj.score > 0 && goatObj.score % REQ_PIPES_FOR_SUPER === 0 && !goatObj.ghostMode) {
+                goatObj.ghostMode = true;
+                goatObj.ghostTimer = GHOST_DURATION;
+                soundFX.playPowerUp();
+            }
+        }
+
+        // Environment Background
+        function drawBackground() {
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#0f172a');
+            skyGradient.addColorStop(0.7, '#1e293b');
+            skyGradient.addColorStop(1, '#334155');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Distant Mountains
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 40);
+            ctx.lineTo(80, canvas.height - 140);
+            ctx.lineTo(180, canvas.height - 40);
+            ctx.lineTo(280, canvas.height - 180);
+            ctx.lineTo(canvas.width, canvas.height - 40);
+            ctx.fill();
+
+            // Moving Ground
+            const groundY = canvas.height - 40;
+            ctx.fillStyle = '#052e16';
+            ctx.fillRect(0, groundY, canvas.width, 40);
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(0, groundY, canvas.width, 8);
+
+            ctx.strokeStyle = '#15803d';
+            ctx.lineWidth = 2;
+            const offset = (frameCount * pipes.speed) % 20;
+            for (let x = -offset; x < canvas.width; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, groundY + 8);
+                ctx.lineTo(x - 10, canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        function checkCollision(goatObj, pipeObj) {
+            const goatRadius = 14;
+            const gx = goatObj.x;
+            const gy = goatObj.y;
+
+            if (gx + goatRadius > pipeObj.x && gx - goatRadius < pipeObj.x + pipes.width) {
+                if (gy - goatRadius < pipeObj.top) return true;
+            }
+            const bottomY = canvas.height - pipeObj.bottom - 40;
+            if (gx + goatRadius > pipeObj.x && gx - goatRadius < pipeObj.x + pipes.width) {
+                if (gy + goatRadius > bottomY) return true;
+            }
+            return false;
+        }
+
+        function updateSkillUI() {
+            // P1 Skill Progress
+            if (player1.ghostMode) {
+                skillBarP1.style.width = `${(player1.ghostTimer / GHOST_DURATION) * 100}%`;
+            } else {
+                skillBarP1.style.width = `${((player1.score % REQ_PIPES_FOR_SUPER) / REQ_PIPES_FOR_SUPER) * 100}%`;
+            }
+
+            // P2 Skill Progress
+            if (gameMode === '2P') {
+                if (player2.ghostMode) {
+                    skillBarP2.style.width = `${(player2.ghostTimer / GHOST_DURATION) * 100}%`;
+                } else {
+                    skillBarP2.style.width = `${((player2.score % REQ_PIPES_FOR_SUPER) / REQ_PIPES_FOR_SUPER) * 100}%`;
+                }
+            }
+        }
+
+        // Game Main Loop
+        function gameLoop() {
+            frameCount++;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+
+            if (gameState === 'PLAYING') {
+                player1.update();
+                if (gameMode === '2P') player2.update();
+                pipes.update();
+                updateSkillUI();
+            }
+
+            pipes.draw();
+            player1.draw();
+            if (gameMode === '2P') player2.draw();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // Controls & Input Handler
+        function handleInputKey(e) {
+            if (gameState !== 'PLAYING') return;
+
+            // P1 Flap -> Spacebar
+            if (e.code === 'Space') {
+                e.preventDefault();
+                player1.flap();
+            }
+            // P2 Flap -> Arrow Up
+            if (e.code === 'ArrowUp' && gameMode === '2P') {
+                e.preventDefault();
+                player2.flap();
+            }
+        }
+
+        function handleTouchInput(e) {
+            if (gameState !== 'PLAYING') return;
+
+            const touchX = e.touches[0].clientX;
+            const screenWidth = window.innerWidth;
+
+            if (gameMode === '1P') {
+                player1.flap();
+            } else {
+                // Split screen touch logic for 2 Players
+                if (touchX < screenWidth / 2) {
+                    player1.flap();
+                } else {
+                    player2.flap();
+                }
+            }
+        }
+
+        window.addEventListener('keydown', handleInputKey);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleTouchInput(e);
+        }, { passive: false });
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState !== 'PLAYING') return;
+            if (gameMode === '1P') {
+                player1.flap();
+            } else {
+                if (e.clientX < window.innerWidth / 2) player1.flap();
+                else player2.flap();
+            }
+        });
+
+        // Flow Management
+        function startGame(mode) {
+            soundFX.init();
+            gameMode = mode;
+            gameState = 'PLAYING';
+
+            if (gameMode === '1P') {
+                p2Hud.classList.add('hidden');
+                touchControlsHint.classList.add('hidden');
+            } else {
+                p2Hud.classList.remove('hidden');
+                touchControlsHint.classList.remove('hidden');
+            }
+
+            player1.reset(canvas.height / 2 - 20);
+            if (gameMode === '2P') player2.reset(canvas.height / 2 + 20);
+
+            pipes.reset();
+            scoreTextP1.innerText = '0';
+            scoreTextP2.innerText = '0';
+
+            menuOverlay.classList.add('hidden');
+            gameOverOverlay.classList.add('hidden');
+            hudLayer.classList.remove('hidden');
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+
+            hudLayer.classList.add('hidden');
+            gameOverOverlay.classList.remove('hidden');
+
+            if (gameMode === '1P') {
+                if (player1.score > highScore1P) {
+                    highScore1P = player1.score;
+                    localStorage.setItem('flappy_goat_highscore', highScore1P);
+                }
+                winnerTitle.innerText = "GAME OVER";
+                scoresDisplay.innerHTML = `
+                    <div class="flex justify-between text-sm"><span class="text-slate-400">Điểm của bạn:</span><span class="font-game text-yellow-400 text-xl">${player1.score}</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-slate-400">Kỷ kỷ lục:</span><span class="font-game text-amber-500 text-xl">${highScore1P}</span></div>
+                `;
+            } else {
+                // 2 Players Winner Calculation
+                if (player1.score > player2.score) {
+                    winnerTitle.innerText = "🏆 PLAYER 1 THẮNG!";
+                } else if (player2.score > player1.score) {
+                    winnerTitle.innerText = "🏆 PLAYER 2 THẮNG!";
+                } else {
+                    winnerTitle.innerText = "🤝 HÒA NHAU!";
+                }
+
+                scoresDisplay.innerHTML = `
+                    <div class="flex justify-between text-sm"><span class="text-white font-bold">P1 (Dê Trắng):</span><span class="font-game text-yellow-400 text-xl">${player1.score} điểm</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-amber-400 font-bold">P2 (Dê Vàng):</span><span class="font-game text-amber-400 text-xl">${player2.score} điểm</span></div>
+                `;
+            }
+        }
+
+        function showMenu() {
+            gameState = 'MENU';
+            menuOverlay.classList.remove('hidden');
+            gameOverOverlay.classList.add('hidden');
+            hudLayer.classList.add('hidden');
+            player1.reset(canvas.height / 2);
+            player2.reset(canvas.height / 2);
+        }
+
+        // Menu Actions
+        document.getElementById('btnPlay1P').addEventListener('click', () => startGame('1P'));
+        document.getElementById('btnPlay2P').addEventListener('click', () => startGame('2P'));
+        document.getElementById('btnRestart').addEventListener('click', () => startGame(gameMode));
+        document.getElementById('btnMenu').addEventListener('click', showMenu);
+        document.getElementById('btnExit').addEventListener('click', () => exitModal.classList.remove('hidden'));
+        document.getElementById('btnCancelExit').addEventListener('click', () => exitModal.classList.add('hidden'));
+        document.getElementById('btnConfirmExit').addEventListener('click', () => {
+            alert('Cảm ơn bạn đã trải nghiệm Flappy Goat!');
+            window.close();
+        });
+
+        window.onload = function() {
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
